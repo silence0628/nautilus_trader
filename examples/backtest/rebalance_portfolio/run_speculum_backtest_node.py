@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-import shutil
+import os
 import subprocess
 import sys
 import textwrap
@@ -40,9 +40,11 @@ from nautilus_trader.model.objects import Money
 from nautilus_trader.model.objects import Price
 from nautilus_trader.model.objects import Quantity
 from nautilus_trader.persistence.catalog.parquet import ParquetDataCatalog
+from speculum_runtime import discover_stone_root
+from speculum_runtime import run_backend_python
 
 
-STONE_ROOT = Path("/Users/a111/Data/wukai/philosophers-stone")
+STONE_ROOT = discover_stone_root()
 if str(STONE_ROOT) not in sys.path:
     sys.path.insert(0, str(STONE_ROOT))
 
@@ -51,9 +53,8 @@ RESULTS_DIR = Path(__file__).resolve().parent / "results"
 RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 CATALOG_DIR = Path(__file__).resolve().parent / "catalogs" / "speculum_rebalance"
 OUTPUT_PATH = RESULTS_DIR / "rebalance_speculum_backtest_node_summary.json"
-TARGET_BACKTEST_ID = "069a7ea6-5737-47bd-b7f2-4dce09d4a91e"
+TARGET_BACKTEST_ID = os.getenv("REBALANCE_BACKTEST_ID", "").strip()
 SPECULUM_DB_CONTAINER = "speculum-postgres"
-SPECULUM_BACKEND_CONTAINER = "speculum-backend"
 
 
 def _resolve_currency(code: str) -> Currency:
@@ -167,37 +168,23 @@ def _run_psql_copy(query: str) -> str:
     return completed.stdout
 
 
-def _run_backend_python(script: str) -> dict[str, Any]:
-    command = [
-        "docker",
-        "exec",
-        SPECULUM_BACKEND_CONTAINER,
-        "sh",
-        "-lc",
-        f"cd /app && python - <<'PY'\n{script}\nPY",
-    ]
-    completed = subprocess.run(command, capture_output=True, text=True, check=True)
-    lines = [line for line in completed.stdout.splitlines() if not line.startswith("\x1b")]
-    json_start = next(index for index, line in enumerate(lines) if line.lstrip().startswith("{"))
-    return json.loads("\n".join(lines[json_start:]))
-
-
 def _load_speculum_context() -> dict[str, Any]:
     script = textwrap.dedent(
         f"""
         import asyncio
         import json
+        import os
         from decimal import Decimal
         from uuid import UUID
 
-        from sqlalchemy import select
+        from sqlalchemy import desc, select
 
         from app.db.base import async_session_factory
         from app.db.models.backtest import Backtest
         from app.db.models.strategy import Strategy
         from app.engine.adapters.nautilus.config_builder import build_strategy_config
 
-        TARGET_ID = UUID("{TARGET_BACKTEST_ID}")
+        TARGET_BACKTEST_ID = {TARGET_BACKTEST_ID!r}
 
         def serialize(value):
             if isinstance(value, Decimal):
@@ -210,12 +197,38 @@ def _load_speculum_context() -> dict[str, Any]:
 
         async def main():
             async with async_session_factory() as session:
-                backtest = (
-                    await session.execute(select(Backtest).where(Backtest.id == TARGET_ID))
-                ).scalar_one()
-                strategy = (
-                    await session.execute(select(Strategy).where(Strategy.id == backtest.strategy_id))
-                ).scalar_one()
+                if TARGET_BACKTEST_ID:
+                    backtest = (
+                        await session.execute(
+                            select(Backtest).where(Backtest.id == UUID(TARGET_BACKTEST_ID))
+                        )
+                    ).scalar_one()
+                    strategy = (
+                        await session.execute(
+                            select(Strategy).where(Strategy.id == backtest.strategy_id)
+                        )
+                    ).scalar_one()
+                else:
+                    rows = (
+                        await session.execute(
+                            select(Backtest, Strategy)
+                            .join(Strategy, Strategy.id == Backtest.strategy_id)
+                            .where(
+                                Backtest.status == "COMPLETED",
+                                Strategy.strategy_class == "RebalancingStrategy",
+                            )
+                            .order_by(desc(Backtest.created_at))
+                        )
+                    ).all()
+                    if not rows:
+                        raise RuntimeError("No completed rebalancing backtest found in speculum DB.")
+
+                    preferred = None
+                    for candidate_backtest, candidate_strategy in rows:
+                        if "baseline" in (candidate_backtest.name or "").lower():
+                            preferred = (candidate_backtest, candidate_strategy)
+                            break
+                    backtest, strategy = preferred or rows[0]
 
                 built = build_strategy_config(
                     strategy_module_path=strategy.module_path,
@@ -246,7 +259,7 @@ def _load_speculum_context() -> dict[str, Any]:
         asyncio.run(main())
         """
     ).strip()
-    return _run_backend_python(script)
+    return run_backend_python(script)
 
 
 def _load_ohlcv(symbol: str, start: str, end: str) -> pd.DataFrame:

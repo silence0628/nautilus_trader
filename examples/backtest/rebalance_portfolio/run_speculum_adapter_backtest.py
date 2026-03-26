@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import json
-import subprocess
+import os
 import textwrap
 from pathlib import Path
+
+from speculum_runtime import run_backend_python
 
 
 RESULTS_DIR = Path(__file__).resolve().parent / "results"
@@ -18,10 +20,11 @@ def _build_remote_script() -> str:
         """
         import asyncio
         import json
+        import os
         from decimal import Decimal
         from uuid import UUID
 
-        from sqlalchemy import select
+        from sqlalchemy import desc, select
 
         from app.db.base import async_session_factory
         from app.db.models.backtest import Backtest
@@ -31,7 +34,7 @@ def _build_remote_script() -> str:
         from app.engine.data_loader import DataLoader
         from app.utils.config_extractor import extract_trading_config
 
-        BACKTEST_ID = UUID("069a7ea6-5737-47bd-b7f2-4dce09d4a91e")
+        TARGET_BACKTEST_ID = os.getenv("REBALANCE_BACKTEST_ID", "").strip()
 
         def serialize(value):
             if isinstance(value, Decimal):
@@ -44,14 +47,38 @@ def _build_remote_script() -> str:
 
         async def main():
             async with async_session_factory() as session:
-                backtest = (
-                    await session.execute(select(Backtest).where(Backtest.id == BACKTEST_ID))
-                ).scalar_one()
-                strategy = (
-                    await session.execute(
-                        select(Strategy).where(Strategy.id == backtest.strategy_id)
-                    )
-                ).scalar_one()
+                if TARGET_BACKTEST_ID:
+                    backtest = (
+                        await session.execute(
+                            select(Backtest).where(Backtest.id == UUID(TARGET_BACKTEST_ID))
+                        )
+                    ).scalar_one()
+                    strategy = (
+                        await session.execute(
+                            select(Strategy).where(Strategy.id == backtest.strategy_id)
+                        )
+                    ).scalar_one()
+                else:
+                    rows = (
+                        await session.execute(
+                            select(Backtest, Strategy)
+                            .join(Strategy, Strategy.id == Backtest.strategy_id)
+                            .where(
+                                Backtest.status == "COMPLETED",
+                                Strategy.strategy_class == "RebalancingStrategy",
+                            )
+                            .order_by(desc(Backtest.created_at))
+                        )
+                    ).all()
+                    if not rows:
+                        raise RuntimeError("No completed rebalancing backtest found in speculum DB.")
+
+                    preferred = None
+                    for candidate_backtest, candidate_strategy in rows:
+                        if "baseline" in (candidate_backtest.name or "").lower():
+                            preferred = (candidate_backtest, candidate_strategy)
+                            break
+                    backtest, strategy = preferred or rows[0]
 
                 request = BacktestRequest(
                     symbol=backtest.symbol,
@@ -111,25 +138,14 @@ def _build_remote_script() -> str:
 
 def run() -> dict:
     remote_script = _build_remote_script()
-    command = [
-        "docker",
-        "exec",
-        "speculum-backend",
-        "sh",
-        "-lc",
-        f"cd /app && python - <<'PY'\n{remote_script}\nPY",
-    ]
-    completed = subprocess.run(command, capture_output=True, text=True, check=True)
-    lines = [line for line in completed.stdout.splitlines() if not line.startswith("\x1b")]
-    json_start = next(
-        index for index, line in enumerate(lines) if line.lstrip().startswith("{")
-    )
-    payload = json.loads("\n".join(lines[json_start:]))
+    payload = run_backend_python(remote_script)
     OUTPUT_PATH.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     return payload
 
 
 if __name__ == "__main__":
+    if os.getenv("REBALANCE_BACKTEST_ID"):
+        print(f"Using explicit REBALANCE_BACKTEST_ID={os.getenv('REBALANCE_BACKTEST_ID')}")
     result = run()
     print(json.dumps(result, ensure_ascii=False, indent=2))
     print(f"\nSaved speculum-adapter summary to {OUTPUT_PATH}")
