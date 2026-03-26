@@ -1,0 +1,14 @@
+{
+  "config_path": "/Users/a111/Data/wukai/philosophers-stone/portfolio/rebalancing/config.yaml",
+  "data_source": "csv:/Users/a111/Data/wukai/philosophers-stone/portfolio/rebalancing/refinement/nautilus/backtest/data",
+  "start": "2023-01-01T00:00:00+00:00",
+  "end": "2026-01-01T00:00:00+00:00",
+  "initial_balance": 10000.0,
+  "final_balance": 29035.73911302,
+  "return_pct": 190.3573911302,
+  "max_drawdown_pct": 13.14959205945361,
+  "total_orders": 69,
+  "total_positions": 27,
+  "total_rebalances": 39,
+  "kill_switch_triggered_ts": 1762282800000000000
+}

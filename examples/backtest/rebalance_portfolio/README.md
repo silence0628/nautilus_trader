@@ -1,0 +1,90 @@
+# Rebalance Portfolio Backtest
+
+This directory contains the `rebalance` research workspace for
+`/Users/a111/Data/wukai/nautilus_trader`.
+
+## Scope
+
+- keep the strategy isolated from shared platform internals
+- reproduce the team `speculum` backtest baseline with real Binance Spot 1h data
+- provide a repeatable foundation for later parameter sweeps and robustness tests
+
+## Current entrypoints
+
+### 1. Local deterministic baseline
+
+Used only to verify the standalone research skeleton is runnable.
+
+```bash
+uv run --active --no-sync python examples/backtest/rebalance_portfolio/run_baseline_backtest.py
+```
+
+### 2. First parameter sweep
+
+This synthetic sweep is kept only as an early technical example.
+
+```bash
+uv run --active --no-sync python examples/backtest/rebalance_portfolio/run_parameter_sweep.py
+```
+
+### 3. Real-data parameter sweep on the aligned baseline
+
+This is the preferred stage-2 polishing entrypoint after the aligned baseline is stable.
+It reuses the team `speculum` backend adapter and the same real Binance Spot 1h data/config baseline.
+
+Output files:
+
+- `/Users/a111/Data/wukai/nautilus_trader/examples/backtest/rebalance_portfolio/results/rebalance_speculum_adapter_parameter_sweep.json`
+- `/Users/a111/Data/wukai/nautilus_trader/examples/backtest/rebalance_portfolio/results/rebalance_speculum_adapter_parameter_sweep.csv`
+- `/Users/a111/Data/wukai/nautilus_trader/examples/backtest/rebalance_portfolio/results/rebalance_speculum_adapter_parameter_sweep.md`
+
+```bash
+python examples/backtest/rebalance_portfolio/run_speculum_adapter_parameter_sweep.py
+```
+
+### 4. Exact `speculum` adapter alignment
+
+This is the formal comparison entrypoint.
+It reuses the team `speculum` backend adapter, database data, and strategy config
+through `docker exec speculum-backend`, then writes the aligned result to:
+
+- `/Users/a111/Data/wukai/nautilus_trader/examples/backtest/rebalance_portfolio/results/rebalance_speculum_adapter_backtest_summary.json`
+
+```bash
+python examples/backtest/rebalance_portfolio/run_speculum_adapter_backtest.py
+```
+
+### 5. Official Nautilus high-level API (`BacktestNode`)
+
+This entrypoint follows the official high-level backtesting style:
+
+- export real data into a `ParquetDataCatalog`
+- configure `BacktestDataConfig`
+- configure `ImportableStrategyConfig`
+- run via `BacktestNode`
+
+Output file:
+
+- `/Users/a111/Data/wukai/nautilus_trader/examples/backtest/rebalance_portfolio/results/rebalance_speculum_backtest_node_summary.json`
+
+```bash
+uv run --active --no-sync python examples/backtest/rebalance_portfolio/run_speculum_backtest_node.py
+```
+
+Important:
+
+- this path is the official native style
+- but it is **not yet** aligned with the team `speculum` result baseline
+- keep using the adapter-aligned path for formal result consistency until the node path is reconciled
+
+## Important rule
+
+Synthetic/local baseline results can be used for code smoke checks only.
+Formal strategy conclusions must be based on the `speculum`-aligned real-data path:
+
+- Binance Spot
+- 1h
+- BTCUSDT / ETHUSDT / SOLUSDT
+- same weights
+- same time range
+- same strategy config

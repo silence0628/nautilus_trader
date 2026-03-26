@@ -1,0 +1,14 @@
+{
+  "config_path": "/Users/a111/Data/wukai/philosophers-stone/portfolio/rebalancing/config.yaml",
+  "data_source": "speculum-postgres:market_datasets/ohlcv_data",
+  "start": "2022-12-31T00:00:00+00:00",
+  "end": "2026-01-01T00:00:00+00:00",
+  "initial_balance": 10000.0,
+  "final_balance": 29047.4363204,
+  "return_pct": 190.47436320399999,
+  "max_drawdown_pct": 13.14855082693405,
+  "total_orders": 69,
+  "total_positions": 27,
+  "total_rebalances": 39,
+  "kill_switch_triggered_ts": 1762282800000000000
+}

@@ -1,0 +1,83 @@
+{
+  "mode": "official_high_level_api",
+  "backtest_id": "069a7ea6-5737-47bd-b7f2-4dce09d4a91e",
+  "name": "BTCUSDT, ETHUSDT, SOLUSDT 1h Backtest",
+  "catalog_path": "/Users/a111/Data/wukai/nautilus_trader/examples/backtest/rebalance_portfolio/catalogs/speculum_rebalance",
+  "stored_symbols": [
+    "BTCUSDT",
+    "ETHUSDT",
+    "SOLUSDT"
+  ],
+  "run_config_id": "c4f5694b6866b591e3c4463d0e8db7cd108e5bff898764becc3a8dbb58673c71",
+  "node_result": {
+    "total_orders": 74,
+    "total_positions": 30,
+    "stats_pnls": {
+      "USDT": {
+        "PnL (total)": -3846.58334842,
+        "PnL% (total)": -38.465833484200004,
+        "Max Winner": 6711.92920371,
+        "Avg Winner": 1609.80175587,
+        "Min Winner": 9.04451843,
+        "Min Loser": -2.45206793,
+        "Avg Loser": -362.25329481642854,
+        "Max Loser": -1011.2236587399999,
+        "Expectancy": 689.509398883,
+        "Win Rate": 0.5333333333333333
+      },
+      "BTC": {
+        "PnL (total)": 0.13955,
+        "PnL% (total)": 0.0,
+        "Max Winner": NaN,
+        "Avg Winner": NaN,
+        "Min Winner": NaN,
+        "Min Loser": NaN,
+        "Avg Loser": NaN,
+        "Max Loser": NaN,
+        "Expectancy": NaN,
+        "Win Rate": NaN
+      },
+      "ETH": {
+        "PnL (total)": 2.07919,
+        "PnL% (total)": 0.0,
+        "Max Winner": NaN,
+        "Avg Winner": NaN,
+        "Min Winner": NaN,
+        "Min Loser": NaN,
+        "Avg Loser": NaN,
+        "Max Loser": NaN,
+        "Expectancy": NaN,
+        "Win Rate": NaN
+      },
+      "SOL": {
+        "PnL (total)": 49.88233,
+        "PnL% (total)": 0.0,
+        "Max Winner": NaN,
+        "Avg Winner": NaN,
+        "Min Winner": NaN,
+        "Min Loser": NaN,
+        "Avg Loser": NaN,
+        "Max Loser": NaN,
+        "Expectancy": NaN,
+        "Win Rate": NaN
+      }
+    },
+    "stats_returns": {
+      "Returns Volatility (252 days)": 14.422161165665798,
+      "Average (Return)": 0.5160632240130637,
+      "Average Loss (Return)": -0.14773074724625182,
+      "Average Win (Return)": 1.474821494090474,
+      "Sharpe Ratio (252 days)": 9.01722917650452,
+      "Sortino Ratio (252 days)": 67.30729854317573,
+      "Profit Factor": 7.986537787598676,
+      "Risk Return Ratio": 0.5680320456168264
+    }
+  },
+  "metrics": {
+    "final_balance": 2237.07919752,
+    "peak_balance": 2237.07919752,
+    "total_return_pct": -77.6292080248,
+    "max_drawdown_pct": 0.0,
+    "equity_points": 3
+  }
+}
