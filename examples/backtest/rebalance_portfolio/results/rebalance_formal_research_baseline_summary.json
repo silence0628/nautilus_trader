@@ -33,5 +33,28 @@
     "total_return_pct": 151.6516741205,
     "max_drawdown_pct": 13.16585146307821,
     "equity_points": 26328
+  },
+  "report_metrics": {
+    "net_profit": 15165.16741205,
+    "total_return_pct": 151.6516741205,
+    "annualized_return_pct": 35.495134330575006,
+    "volatility_pct": 224.70770020195272,
+    "sharpe_ratio": 5.0836952811723055,
+    "sortino_ratio": 22.48586759289292,
+    "calmar_ratio": 1.9929868105041975,
+    "total_trades": 27,
+    "winning_trades": 13,
+    "losing_trades": 14,
+    "win_rate": 48.148148148148145,
+    "profit_factor": 3.4182121070616414,
+    "average_duration_hours": 721.5555555555555,
+    "long_trades": 27,
+    "long_winning_trades": 13,
+    "long_win_rate": 48.148148148148145,
+    "long_total_pnl": 15030.832716870002,
+    "short_trades": 0,
+    "short_winning_trades": 0,
+    "short_win_rate": 0.0,
+    "short_total_pnl": 0.0
   }
 }

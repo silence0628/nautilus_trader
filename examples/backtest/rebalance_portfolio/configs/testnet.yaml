@@ -1,0 +1,18 @@
+extends: baseline.yaml
+
+runtime:
+  trader_id: RBL-TESTNET-001
+  log_level: INFO
+  account_type: SPOT
+  key_type: ED25519
+  testnet: true
+  us: false
+  reconciliation: true
+  reconciliation_lookback_mins: 1440
+  timeout_connection: 30.0
+  timeout_reconciliation: 10.0
+  timeout_portfolio: 10.0
+  timeout_disconnection: 10.0
+  timeout_post_stop: 5.0
+  instrument_provider_load_all: true
+  max_retries: 3

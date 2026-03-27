@@ -1,0 +1,91 @@
+trading:
+  fees:
+    maker: 0.0002
+    taker: 0.0004
+    funding_rate: 0
+  pairs:
+    - BTC-USDT
+    - ETH-USDT
+    - SOL-USDT
+  leverage: 1
+  connector: binance
+  direction: long
+  execution:
+    price_type: mid
+    max_retries: 3
+    split_orders:
+      enabled: false
+      interval_ms: 1000
+      max_single_order_pct: 0.1
+    retry_on_failure: true
+    price_improvement:
+      enabled: false
+      pullback_pct: 0.002
+      pullback_timeout: 300
+      wait_for_pullback: false
+    slippage_tolerance: 0.001
+    limit_order_timeout: 60
+  order_type: market
+  position_mode: ONEWAY
+
+position:
+  size_type: percentage
+  size_value: 0.1
+  capital_mode: compound
+  initial_capital: 10000
+
+platforms:
+  nautilus:
+    venue: BINANCE
+    bar_type: 1-HOUR
+    bar_aggregation: EXTERNAL
+
+research:
+  timeframe: 1h
+  start_time: "2022-12-31 00:00:00"
+  end_time: "2026-01-01 00:00:00"
+  quote_currency: USDT
+
+runtime:
+  trader_id: RBL-RESEARCH-001
+  log_level: INFO
+  account_type: SPOT
+  testnet: false
+  us: false
+  reconciliation: true
+  reconciliation_lookback_mins: 1440
+  timeout_connection: 30.0
+  timeout_reconciliation: 10.0
+  timeout_portfolio: 10.0
+  timeout_disconnection: 10.0
+  timeout_post_stop: 5.0
+  instrument_provider_load_all: true
+  max_retries: 3
+
+parameters:
+  assets:
+    - pair: BTC-USDT
+      weight: 0.42
+    - pair: ETH-USDT
+      weight: 0.28
+    - pair: SOL-USDT
+      weight: 0.30
+  max_drawdown: 0.1
+  min_trade_value: 50
+  kill_switch_mode: liquidate_and_resume
+  use_trend_filter: true
+  min_cooldown_secs: 86400
+  cash_reserve_ratio: 0.03
+  rebalance_threshold: 0.1
+  trend_lookback_bars: 60
+  max_daily_rebalances: 1
+  post_resume_band_secs: 0
+  trend_strength_buffer: 0.02
+  use_volatility_filter: true
+  max_single_trade_ratio: 0.2
+  close_positions_on_stop: false
+  kill_switch_resume_secs: 7862400
+  volatility_lookback_bars: 48
+  post_resume_throttle_secs: 0
+  volatility_threshold_multiplier: 1.5
+  post_resume_max_single_trade_ratio:

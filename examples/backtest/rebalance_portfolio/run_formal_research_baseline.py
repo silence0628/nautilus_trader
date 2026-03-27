@@ -3,22 +3,34 @@
 from __future__ import annotations
 
 import json
+import importlib.util
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import numpy as np
+import pandas as pd
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 WORKSPACE_ROOT = REPO_ROOT.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
+SPECULUM_METRICS_PATH = (
+    WORKSPACE_ROOT
+    / "speculum"
+    / "backend"
+    / "app"
+    / "engine"
+    / "adapters"
+    / "nautilus"
+    / "metrics.py"
+)
 
-from formal_strategy import FormalRebalancingStrategy
-from formal_strategy import ResearchAssetConfig
-from formal_strategy import ResearchParametersConfig
-from formal_strategy import ResearchRebalancingConfig
+from configs.loader import build_research_context
+from strategy_core.rebalance_strategy import FormalRebalancingStrategy
+from strategy_core.rebalance_strategy import ResearchRebalancingConfig
 
 from nautilus_trader.backtest.engine import BacktestEngine
 from nautilus_trader.backtest.models import FillModel
@@ -39,99 +51,35 @@ from nautilus_trader.model.objects import Money
 
 from run_speculum_backtest_node import _load_ohlcv
 from run_speculum_backtest_node import create_spot_instrument
+from reporting import build_equity_curve_dataframe
+from reporting import build_equity_curve_dataframe_with_initial
+from reporting import build_monthly_returns_from_indicator_points
+from reporting import build_recent_trades_table
+from reporting import calculate_performance_metrics
+from reporting import calculate_trade_statistics
+from reporting import render_formal_markdown_report
 
 
-STONE_CONFIG_PATH = (
-    WORKSPACE_ROOT
-    / "philosophers-stone"
-    / "portfolio"
-    / "rebalancing"
-    / "config.yaml"
-)
+_metrics_spec = importlib.util.spec_from_file_location("speculum_nautilus_metrics", SPECULUM_METRICS_PATH)
+if _metrics_spec is None or _metrics_spec.loader is None:
+    raise RuntimeError(f"Unable to load Speculum metrics module from {SPECULUM_METRICS_PATH}")
+_metrics_module = importlib.util.module_from_spec(_metrics_spec)
+_metrics_spec.loader.exec_module(_metrics_module)
+calculate_advanced_metrics = _metrics_module.calculate_advanced_metrics
+
+
 RESULTS_DIR = Path(__file__).resolve().parent / "results"
 RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 OUTPUT_PATH = RESULTS_DIR / "rebalance_formal_research_baseline_summary.json"
+REPORT_PATH = RESULTS_DIR / "backtest_report_BTCUSDT_ETHUSDT_SOLUSDT_1h_formal_research_baseline.md"
 
 
 TIMEFRAME_MAP = {
     "1h": (1, BarAggregation.HOUR),
 }
 
-
-def _extract_values(node: Any) -> Any:
-    if isinstance(node, dict):
-        if "value" in node and "type" in node:
-            return node["value"]
-        result = {}
-        for key, value in node.items():
-            if key.startswith("_"):
-                continue
-            result[key] = _extract_values(value)
-        return result
-    if isinstance(node, list):
-        return [_extract_values(item) for item in node]
-    return node
-
-
 def load_formal_research_config() -> dict[str, Any]:
-    raw = yaml.safe_load(STONE_CONFIG_PATH.read_text(encoding="utf-8"))
-    values = _extract_values(raw)
-    trading = values["trading"]
-    position = values["position"]
-    platforms = values["platforms"]
-    parameters = values["parameters"]
-    venue = platforms["nautilus"]["venue"]
-    bar_type = platforms["nautilus"]["bar_type"]
-    bar_aggregation = platforms["nautilus"]["bar_aggregation"]
-
-    assets = []
-    for asset in parameters["assets"]:
-        pair = asset["pair"]
-        symbol = pair.replace("-", "")
-        instrument_id = f"{symbol}.{venue}"
-        assets.append(
-            ResearchAssetConfig(
-                pair=pair,
-                weight=float(asset["weight"]),
-                instrument_id=instrument_id,
-                bar_type=f"{instrument_id}-{bar_type}-LAST-{bar_aggregation}",
-            )
-        )
-
-    parameters_config = ResearchParametersConfig(
-        assets=tuple(assets),
-        rebalance_threshold=parameters["rebalance_threshold"],
-        min_cooldown_secs=parameters["min_cooldown_secs"],
-        cash_reserve_ratio=parameters["cash_reserve_ratio"],
-        min_trade_value=parameters["min_trade_value"],
-        max_single_trade_ratio=parameters["max_single_trade_ratio"],
-        max_drawdown=parameters["max_drawdown"],
-        max_daily_rebalances=parameters["max_daily_rebalances"],
-        use_volatility_filter=parameters["use_volatility_filter"],
-        volatility_lookback_bars=parameters["volatility_lookback_bars"],
-        volatility_threshold_multiplier=parameters["volatility_threshold_multiplier"],
-        use_trend_filter=parameters["use_trend_filter"],
-        trend_lookback_bars=parameters["trend_lookback_bars"],
-        trend_strength_buffer=parameters["trend_strength_buffer"],
-        kill_switch_mode=parameters["kill_switch_mode"],
-        kill_switch_resume_secs=parameters["kill_switch_resume_secs"],
-        close_positions_on_stop=parameters["close_positions_on_stop"],
-        post_resume_band_secs=parameters["post_resume_band_secs"],
-        post_resume_throttle_secs=parameters["post_resume_throttle_secs"],
-        post_resume_max_single_trade_ratio=parameters["post_resume_max_single_trade_ratio"],
-    )
-
-    return {
-        "symbol": "BTCUSDT",
-        "venue": venue,
-        "timeframe": "1h",
-        "start_time": "2022-12-31 00:00:00",
-        "end_time": "2026-01-01 00:00:00",
-        "trading": trading,
-        "position": position,
-        "platforms": platforms,
-        "parameters": parameters_config,
-    }
+    return build_research_context("baseline")
 
 
 def _dataframe_to_bars(df, instrument, bar_spec):
@@ -191,6 +139,7 @@ def run() -> dict[str, Any]:
     trading = context["trading"]
     initial_capital = float(context["position"]["initial_capital"])
     fees = trading.get("fees", {})
+    market_data: dict[str, pd.DataFrame] = {}
 
     engine = BacktestEngine(
         config=BacktestEngineConfig(
@@ -210,6 +159,7 @@ def run() -> dict[str, Any]:
     for pair in trading["pairs"]:
         symbol = pair.replace("-", "")
         df = _load_ohlcv(symbol, context["start_time"], context["end_time"])
+        market_data[symbol] = df
         instrument = create_spot_instrument(
             symbol=symbol,
             venue=context["venue"],
@@ -233,8 +183,66 @@ def run() -> dict[str, Any]:
 
     portfolio_points = strategy.get_indicator_history()["portfolio_value"]["points"]
     drawdown_points = strategy.get_indicator_history()["drawdown"]["points"]
+    account_report = engine.trader.generate_account_report(Venue(context["venue"]))
+    fills_report = engine.trader.generate_order_fills_report()
+    positions_report = engine.trader.generate_positions_report()
     portfolio_values = np.array([float(point["value"]) for point in portfolio_points], dtype=float)
     drawdown_values = np.array([float(point["value"]) for point in drawdown_points], dtype=float)
+    equity_df = build_equity_curve_dataframe_with_initial(
+        portfolio_points,
+        initial_timestamp=pd.Timestamp(context["start_time"], tz=UTC),
+        initial_value=initial_capital,
+    )
+    fallback_metrics = calculate_performance_metrics(
+        equity_df=equity_df,
+        initial_capital=initial_capital,
+        max_drawdown_pct=float(np.max(drawdown_values) * 100),
+    )
+    team_metrics = calculate_advanced_metrics(
+        account_df=account_report,
+        positions_df=positions_report,
+        initial_balance=initial_capital,
+        trading_days=(pd.Timestamp(context["end_time"]) - pd.Timestamp(context["start_time"])).days,
+        market_data=market_data,
+        quote_currency="USDT",
+    )
+    trade_stats = calculate_trade_statistics(positions_report)
+    monthly_returns = build_monthly_returns_from_indicator_points(
+        portfolio_points,
+        initial_timestamp=context["start_time"],
+        initial_value=initial_capital,
+    )
+    recent_trades = build_recent_trades_table(positions_report)
+
+    strategy_config = {
+        "trading": context["trading"],
+        "position": context["position"],
+        "parameters": {
+            "assets": [
+                {"pair": asset.pair, "weight": asset.weight}
+                for asset in context["parameters"].assets
+            ],
+            "rebalance_threshold": context["parameters"].rebalance_threshold,
+            "min_cooldown_secs": context["parameters"].min_cooldown_secs,
+            "cash_reserve_ratio": context["parameters"].cash_reserve_ratio,
+            "min_trade_value": context["parameters"].min_trade_value,
+            "max_single_trade_ratio": context["parameters"].max_single_trade_ratio,
+            "max_drawdown": context["parameters"].max_drawdown,
+            "max_daily_rebalances": context["parameters"].max_daily_rebalances,
+            "use_volatility_filter": context["parameters"].use_volatility_filter,
+            "volatility_lookback_bars": context["parameters"].volatility_lookback_bars,
+            "volatility_threshold_multiplier": context["parameters"].volatility_threshold_multiplier,
+            "use_trend_filter": context["parameters"].use_trend_filter,
+            "trend_lookback_bars": context["parameters"].trend_lookback_bars,
+            "trend_strength_buffer": context["parameters"].trend_strength_buffer,
+            "kill_switch_mode": context["parameters"].kill_switch_mode,
+            "kill_switch_resume_secs": context["parameters"].kill_switch_resume_secs,
+            "close_positions_on_stop": context["parameters"].close_positions_on_stop,
+            "post_resume_band_secs": context["parameters"].post_resume_band_secs,
+            "post_resume_throttle_secs": context["parameters"].post_resume_throttle_secs,
+            "post_resume_max_single_trade_ratio": context["parameters"].post_resume_max_single_trade_ratio,
+        },
+    }
 
     payload = {
         "mode": "formal_research_baseline",
@@ -249,8 +257,8 @@ def run() -> dict[str, Any]:
             for asset in context["parameters"].assets
         ],
         "kill_switch_mode": context["parameters"].kill_switch_mode,
-        "fills_count": len(engine.trader.generate_order_fills_report()),
-        "positions_count": len(engine.trader.generate_positions_report()),
+        "fills_count": len(fills_report),
+        "positions_count": len(positions_report),
         "metrics": {
             "final_balance": float(portfolio_values[-1]),
             "peak_balance": float(np.max(portfolio_values)),
@@ -258,8 +266,48 @@ def run() -> dict[str, Any]:
             "max_drawdown_pct": float(np.max(drawdown_values) * 100),
             "equity_points": len(portfolio_points),
         },
+        "report_metrics": {
+            **fallback_metrics,
+            "annualized_return_pct": team_metrics.get(
+                "annualized_return", fallback_metrics["annualized_return_pct"]
+            ),
+            "volatility_pct": team_metrics.get("volatility", fallback_metrics["volatility_pct"]),
+            "sharpe_ratio": team_metrics.get("sharpe_ratio", fallback_metrics["sharpe_ratio"]),
+            "sortino_ratio": team_metrics.get("sortino_ratio", fallback_metrics["sortino_ratio"]),
+            "calmar_ratio": team_metrics.get("calmar_ratio", fallback_metrics["calmar_ratio"]),
+            **trade_stats,
+        },
     }
     OUTPUT_PATH.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    report_markdown = render_formal_markdown_report(
+        title=f"{', '.join(pair.replace('-', '') for pair in context['trading']['pairs'])} {context['timeframe']} Backtest",
+        generated_at=datetime.now(tz=UTC),
+        context={
+            "pairs": [pair.replace("-", "") for pair in context["trading"]["pairs"]],
+            "venue": context["venue"],
+            "timeframe": context["timeframe"],
+            "start_time": pd.Timestamp(context["start_time"], tz=UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "end_time": pd.Timestamp(context["end_time"], tz=UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "initial_capital": initial_capital,
+        },
+        strategy_config=strategy_config,
+        metrics={
+            "net_profit": fallback_metrics["net_profit"],
+            "total_return_pct": payload["metrics"]["total_return_pct"],
+            "annualized_return_pct": payload["report_metrics"]["annualized_return_pct"],
+            "max_drawdown_pct": payload["metrics"]["max_drawdown_pct"],
+            "final_balance": payload["metrics"]["final_balance"],
+            "sharpe_ratio": payload["report_metrics"]["sharpe_ratio"],
+            "sortino_ratio": payload["report_metrics"]["sortino_ratio"],
+            "calmar_ratio": payload["report_metrics"]["calmar_ratio"],
+            "volatility_pct": payload["report_metrics"]["volatility_pct"],
+        },
+        trade_stats=trade_stats,
+        monthly_returns=monthly_returns,
+        recent_trades=recent_trades,
+    )
+    REPORT_PATH.write_text(report_markdown, encoding="utf-8")
     engine.dispose()
     return payload
 
@@ -268,3 +316,4 @@ if __name__ == "__main__":
     result = run()
     print(json.dumps(result, ensure_ascii=False, indent=2))
     print(f"\nSaved formal research baseline to {OUTPUT_PATH}")
+    print(f"Saved formal research report to {REPORT_PATH}")
