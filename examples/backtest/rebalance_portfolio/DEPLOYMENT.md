@@ -78,6 +78,32 @@ The program actually uses:
 - `BINANCE_TESTNET_API_KEY`
 - `BINANCE_TESTNET_API_SECRET_FILE` or `BINANCE_TESTNET_API_SECRET`
 
+### 4.1a Register Binance Spot Testnet API
+
+Use this full flow:
+
+1. Generate an `Ed25519` key pair with your key generator
+   - keep the `Private Key`
+   - copy the `Public Key`
+2. Open:
+   - [https://testnet.binance.vision/](https://testnet.binance.vision/)
+3. Go to `ed25519 Register Public Key`
+4. Paste the generated `Public Key`
+5. Complete registration
+6. Binance Spot Testnet will return an `API Key`
+
+After registration, the final usable credential set is:
+
+- `API Key`
+- matching `Private Key`
+- `Public Key`
+
+Important:
+
+- the program signs requests with the `Private Key`
+- the `Public Key` is mainly for Binance registration and later verification
+- if the `API Key` and `Private Key` are not from the same key pair, auth will fail
+
 ### 4.2 Local secret files
 
 Recommended local-only files:
@@ -86,6 +112,33 @@ Recommended local-only files:
 - `/Users/a111/Data/wukai/nautilus_trader/examples/backtest/rebalance_portfolio/configs/binance_testnet_ed25519.key`
 
 These must remain untracked.
+
+Recommended file content:
+
+`/Users/a111/Data/wukai/nautilus_trader/examples/backtest/rebalance_portfolio/configs/testnet.env`
+
+```bash
+BINANCE_TESTNET_API_KEY=your_api_key
+BINANCE_TESTNET_API_SECRET_FILE=/Users/a111/Data/wukai/nautilus_trader/examples/backtest/rebalance_portfolio/configs/binance_testnet_ed25519.key
+```
+
+`/Users/a111/Data/wukai/nautilus_trader/examples/backtest/rebalance_portfolio/configs/binance_testnet_ed25519.key`
+
+```text
+-----BEGIN PRIVATE KEY-----
+your_private_key_body
+-----END PRIVATE KEY-----
+```
+
+Not recommended:
+
+- placing the full private key directly into the `.env` file
+
+Recommended:
+
+- store `API Key` in `testnet.env`
+- store the `Private Key` in a separate `.key` file
+- point `BINANCE_TESTNET_API_SECRET_FILE` to that file
 
 ### 4.3 Preflight
 
