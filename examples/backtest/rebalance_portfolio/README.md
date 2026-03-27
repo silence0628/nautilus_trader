@@ -28,6 +28,10 @@ This directory contains the `rebalance` research workspace for
 - `results/`
   - legacy generated backtest artifacts kept for compatibility
 
+## Latest deployment doc
+
+- `/Users/a111/Data/wukai/nautilus_trader/examples/backtest/rebalance_portfolio/DEPLOYMENT.md`
+
 ## Current entrypoints
 
 ### 0. Formal research baseline
