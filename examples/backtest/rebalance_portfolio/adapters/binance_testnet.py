@@ -140,7 +140,7 @@ def validate_spot_testnet_env() -> tuple[str, str]:
     return os.environ["BINANCE_TESTNET_API_KEY"], api_secret
 
 
-def build_spot_testnet_node(profile_name: str = "testnet") -> TradingNode:
+def build_spot_testnet_runtime(profile_name: str = "testnet") -> tuple[TradingNode, FormalRebalancingStrategy, dict]:
     api_key, api_secret = validate_spot_testnet_env()
     context = build_research_context(profile_name)
     runtime = context["runtime"]
@@ -204,4 +204,9 @@ def build_spot_testnet_node(profile_name: str = "testnet") -> TradingNode:
     node.add_data_client_factory(venue, BinanceLiveDataClientFactory)
     node.add_exec_client_factory(venue, BinanceSpotTestnetCompatExecClientFactory)
     node.build()
+    return node, strategy, context
+
+
+def build_spot_testnet_node(profile_name: str = "testnet") -> TradingNode:
+    node, _, _ = build_spot_testnet_runtime(profile_name)
     return node

@@ -14,7 +14,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from adapters.binance_testnet import REQUIRED_TESTNET_ENV_VARS
-from adapters.binance_testnet import build_spot_testnet_node
+from adapters.binance_testnet import build_spot_testnet_runtime
 from configs import build_research_context
 from configs import load_env_file
 
@@ -24,7 +24,7 @@ def main() -> None:
     loaded = load_env_file(env_path)
     context = build_research_context("testnet")
 
-    node = build_spot_testnet_node("testnet")
+    node, _, _ = build_spot_testnet_runtime("testnet")
     try:
         payload = {
             "status": "ready",
