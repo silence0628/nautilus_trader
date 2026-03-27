@@ -1,0 +1,37 @@
+{
+  "mode": "formal_research_baseline",
+  "symbol": "BTCUSDT",
+  "venue": "BINANCE",
+  "timeframe": "1h",
+  "start_time": "2022-12-31 00:00:00",
+  "end_time": "2026-01-01 00:00:00",
+  "pairs": [
+    "BTC-USDT",
+    "ETH-USDT",
+    "SOL-USDT"
+  ],
+  "weights": [
+    {
+      "pair": "BTC-USDT",
+      "weight": 0.42
+    },
+    {
+      "pair": "ETH-USDT",
+      "weight": 0.28
+    },
+    {
+      "pair": "SOL-USDT",
+      "weight": 0.3
+    }
+  ],
+  "kill_switch_mode": "liquidate_and_resume",
+  "fills_count": 73,
+  "positions_count": 30,
+  "metrics": {
+    "final_balance": 25165.16741205,
+    "peak_balance": 29579.45469886,
+    "total_return_pct": 151.6516741205,
+    "max_drawdown_pct": 13.16585146307821,
+    "equity_points": 26328
+  }
+}

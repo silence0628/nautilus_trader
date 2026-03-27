@@ -11,6 +11,27 @@ This directory contains the `rebalance` research workspace for
 
 ## Current entrypoints
 
+### 0. Formal research baseline
+
+This is now the primary research-side entrypoint.
+It uses the formal `stone` strategy logic ported into `nautilus_trader`, reads the
+formal default parameters from `philosophers-stone/portfolio/rebalancing/config.yaml`,
+and runs on real Binance Spot `1h` data.
+
+Output file:
+
+- `/Users/a111/Data/wukai/nautilus_trader/examples/backtest/rebalance_portfolio/results/rebalance_formal_research_baseline_summary.json`
+
+```bash
+uv run --active --no-sync python examples/backtest/rebalance_portfolio/run_formal_research_baseline.py
+```
+
+Important:
+
+- this is the strategy-first research entrypoint
+- it should be treated as the future mainline for `nautilus_trader` rebalance research
+- `stone` / `speculum` should later consume mature conclusions from here, not define them
+
 ### 1. Local deterministic baseline
 
 Used only to verify the standalone research skeleton is runnable.
@@ -73,18 +94,12 @@ uv run --active --no-sync python examples/backtest/rebalance_portfolio/run_specu
 
 Important:
 
-- this path is the official native style
-- but it is **not yet** aligned with the team `speculum` result baseline
-- keep using the adapter-aligned path for formal result consistency until the node path is reconciled
+- this path is a comparison tool, not the research truth source
+- use it to compare `nautilus_trader` research output against team-system execution output
+- do not let this path reverse-define the strategy core
 
 ## Important rule
 
 Synthetic/local baseline results can be used for code smoke checks only.
-Formal strategy conclusions must be based on the `speculum`-aligned real-data path:
-
-- Binance Spot
-- 1h
-- BTCUSDT / ETHUSDT / SOLUSDT
-- same weights
-- same time range
-- same strategy config
+Formal research should start from the local `nautilus_trader` formal strategy path.
+Team alignment remains necessary, but must happen after the research logic is first established here.
