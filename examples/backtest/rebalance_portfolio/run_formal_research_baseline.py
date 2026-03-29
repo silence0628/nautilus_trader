@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import json
 import importlib.util
+import importlib
+import os
+import subprocess
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -28,29 +31,6 @@ SPECULUM_METRICS_PATH = (
     / "metrics.py"
 )
 
-from configs.loader import build_research_context
-from strategy_core.rebalance_strategy import FormalRebalancingStrategy
-from strategy_core.rebalance_strategy import ResearchRebalancingConfig
-
-from nautilus_trader.backtest.engine import BacktestEngine
-from nautilus_trader.backtest.models import FillModel
-from nautilus_trader.backtest.models import LatencyModel
-from nautilus_trader.config import BacktestEngineConfig
-from nautilus_trader.config import LoggingConfig
-from nautilus_trader.model.data import Bar
-from nautilus_trader.model.data import BarSpecification
-from nautilus_trader.model.data import QuoteTick
-from nautilus_trader.model.enums import AccountType
-from nautilus_trader.model.enums import AggregationSource
-from nautilus_trader.model.enums import BarAggregation
-from nautilus_trader.model.enums import OmsType
-from nautilus_trader.model.enums import PriceType
-from nautilus_trader.model.identifiers import Venue
-from nautilus_trader.model.objects import Currency
-from nautilus_trader.model.objects import Money
-
-from run_speculum_backtest_node import _load_ohlcv
-from run_speculum_backtest_node import create_spot_instrument
 from reporting import build_equity_curve_dataframe
 from reporting import build_equity_curve_dataframe_with_initial
 from reporting import build_monthly_returns_from_indicator_points
@@ -72,6 +52,122 @@ RESULTS_DIR = Path(__file__).resolve().parent / "results"
 RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 OUTPUT_PATH = RESULTS_DIR / "rebalance_formal_research_baseline_summary.json"
 REPORT_PATH = RESULTS_DIR / "backtest_report_BTCUSDT_ETHUSDT_SOLUSDT_1h_formal_research_baseline.md"
+
+
+def _env_float(name: str, default: float) -> float:
+    raw = os.getenv(name)
+    if raw is None or raw.strip() == "":
+        return default
+    return float(raw)
+
+
+def _scenario_paths() -> tuple[Path, Path, str]:
+    scenario = os.getenv("REBALANCE_SCENARIO_NAME", "").strip()
+    if not scenario:
+        return OUTPUT_PATH, REPORT_PATH, "baseline"
+
+    safe = "".join(ch if ch.isalnum() or ch in ("-", "_") else "_" for ch in scenario)
+    output = RESULTS_DIR / f"rebalance_formal_research_baseline_summary_{safe}.json"
+    report = RESULTS_DIR / (
+        f"backtest_report_BTCUSDT_ETHUSDT_SOLUSDT_1h_formal_research_baseline_{safe}.md"
+    )
+    return output, report, safe
+
+
+def _parse_semver(value: str) -> tuple[int, int, int]:
+    parts = value.strip().split(".")
+    normalized = []
+    for part in parts[:3]:
+        digits = "".join(ch for ch in part if ch.isdigit())
+        normalized.append(int(digits or 0))
+    while len(normalized) < 3:
+        normalized.append(0)
+    return tuple(normalized)
+
+
+def _read_required_rust_version() -> str | None:
+    toolchain_path = REPO_ROOT / "rust-toolchain.toml"
+    if not toolchain_path.exists():
+        return None
+    for line in toolchain_path.read_text(encoding="utf-8").splitlines():
+        if line.strip().startswith("version"):
+            return line.split("=", 1)[1].strip().strip('"')
+    return None
+
+
+def _read_local_rust_version() -> str | None:
+    try:
+        completed = subprocess.run(
+            ["rustc", "--version"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        return None
+    parts = completed.stdout.strip().split()
+    return parts[1] if len(parts) >= 2 else None
+
+
+def _ensure_nautilus_runtime_ready() -> None:
+    required_rust = _read_required_rust_version()
+    local_rust = _read_local_rust_version()
+
+    try:
+        importlib.import_module("nautilus_trader.core.data")
+    except ModuleNotFoundError as exc:
+        hints = [
+            "Formal research baseline requires Nautilus compiled extensions to be available.",
+            f"Current repo path: {REPO_ROOT}",
+        ]
+        if local_rust and required_rust and _parse_semver(local_rust) < _parse_semver(required_rust):
+            hints.append(
+                f"Current rustc is {local_rust}, but this repo requires at least {required_rust}."
+            )
+            hints.append("Update Rust toolchain first, then rebuild/install nautilus_trader.")
+        elif required_rust:
+            hints.append(f"Required Rust toolchain version: {required_rust}.")
+
+        current_python = Path(sys.executable)
+        if ".venv" in current_python.parts or os.environ.get("VIRTUAL_ENV"):
+            hints.append(
+                f"Current interpreter is {current_python}, but it is still missing the compiled nautilus_trader core modules."
+            )
+        else:
+            hints.append(
+                f"Current interpreter is {current_python}; no prepared nautilus virtualenv with compiled core modules was detected."
+            )
+
+        hints.append(
+            "Fallback available now: keep using run_speculum_adapter_backtest.py for aligned research validation."
+        )
+        raise RuntimeError("\n".join(hints)) from exc
+
+
+_ensure_nautilus_runtime_ready()
+
+from configs.loader import build_research_context
+from strategy_core.rebalance_strategy import FormalRebalancingStrategy
+from strategy_core.rebalance_strategy import ResearchRebalancingConfig
+
+from nautilus_trader.backtest.engine import BacktestEngine
+from nautilus_trader.backtest.models import FillModel
+from nautilus_trader.backtest.models import LatencyModel
+from nautilus_trader.config import BacktestEngineConfig
+from nautilus_trader.config import LoggingConfig
+from nautilus_trader.model.data import Bar
+from nautilus_trader.model.data import BarSpecification
+from nautilus_trader.model.data import QuoteTick
+from nautilus_trader.model.enums import AccountType
+from nautilus_trader.model.enums import AggregationSource
+from nautilus_trader.model.enums import BarAggregation
+from nautilus_trader.model.enums import OmsType
+from nautilus_trader.model.enums import PriceType
+from nautilus_trader.model.identifiers import Venue
+from nautilus_trader.model.objects import Currency
+from nautilus_trader.model.objects import Money
+from run_speculum_backtest_node import _load_ohlcv
+from run_speculum_backtest_node import create_spot_instrument
 
 
 TIMEFRAME_MAP = {
@@ -134,11 +230,16 @@ def _dataframe_to_quotes(df, instrument, bar_spec):
 
 def run() -> dict[str, Any]:
     context = load_formal_research_config()
+    output_path, report_path, scenario_name = _scenario_paths()
     step, aggregation = TIMEFRAME_MAP[context["timeframe"]]
     bar_spec = BarSpecification(step=step, aggregation=aggregation, price_type=PriceType.LAST)
     trading = context["trading"]
     initial_capital = float(context["position"]["initial_capital"])
     fees = trading.get("fees", {})
+    maker_fee = _env_float("REBALANCE_MAKER_FEE", float(fees.get("maker", 0.0002)))
+    taker_fee = _env_float("REBALANCE_TAKER_FEE", float(fees.get("taker", 0.0004)))
+    prob_fill_on_limit = _env_float("REBALANCE_PROB_FILL_ON_LIMIT", 1.0)
+    prob_slippage = _env_float("REBALANCE_PROB_SLIPPAGE", 0.0)
     market_data: dict[str, pd.DataFrame] = {}
 
     engine = BacktestEngine(
@@ -152,7 +253,10 @@ def run() -> dict[str, Any]:
         account_type=AccountType.CASH,
         base_currency=None,
         starting_balances=[Money(initial_capital, Currency.from_str("USDT"))],
-        fill_model=FillModel(),
+        fill_model=FillModel(
+            prob_fill_on_limit=prob_fill_on_limit,
+            prob_slippage=prob_slippage,
+        ),
         latency_model=LatencyModel(),
     )
 
@@ -163,8 +267,8 @@ def run() -> dict[str, Any]:
         instrument = create_spot_instrument(
             symbol=symbol,
             venue=context["venue"],
-            maker_fee=fees.get("maker", 0.0002),
-            taker_fee=fees.get("taker", 0.0004),
+            maker_fee=maker_fee,
+            taker_fee=taker_fee,
         )
         engine.add_instrument(instrument)
         engine.add_data(_dataframe_to_quotes(df, instrument, bar_spec))
@@ -246,6 +350,7 @@ def run() -> dict[str, Any]:
 
     payload = {
         "mode": "formal_research_baseline",
+        "scenario": scenario_name,
         "symbol": context["symbol"],
         "venue": context["venue"],
         "timeframe": context["timeframe"],
@@ -257,6 +362,12 @@ def run() -> dict[str, Any]:
             for asset in context["parameters"].assets
         ],
         "kill_switch_mode": context["parameters"].kill_switch_mode,
+        "execution_assumptions": {
+            "maker_fee": maker_fee,
+            "taker_fee": taker_fee,
+            "prob_fill_on_limit": prob_fill_on_limit,
+            "prob_slippage": prob_slippage,
+        },
         "fills_count": len(fills_report),
         "positions_count": len(positions_report),
         "metrics": {
@@ -278,7 +389,7 @@ def run() -> dict[str, Any]:
             **trade_stats,
         },
     }
-    OUTPUT_PATH.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    output_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
     report_markdown = render_formal_markdown_report(
         title=f"{', '.join(pair.replace('-', '') for pair in context['trading']['pairs'])} {context['timeframe']} Backtest",
@@ -307,7 +418,7 @@ def run() -> dict[str, Any]:
         monthly_returns=monthly_returns,
         recent_trades=recent_trades,
     )
-    REPORT_PATH.write_text(report_markdown, encoding="utf-8")
+    report_path.write_text(report_markdown, encoding="utf-8")
     engine.dispose()
     return payload
 
@@ -315,5 +426,6 @@ def run() -> dict[str, Any]:
 if __name__ == "__main__":
     result = run()
     print(json.dumps(result, ensure_ascii=False, indent=2))
-    print(f"\nSaved formal research baseline to {OUTPUT_PATH}")
-    print(f"Saved formal research report to {REPORT_PATH}")
+    output_path, report_path, _ = _scenario_paths()
+    print(f"\nSaved formal research baseline to {output_path}")
+    print(f"Saved formal research report to {report_path}")

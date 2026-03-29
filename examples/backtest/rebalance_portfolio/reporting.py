@@ -10,6 +10,24 @@ import numpy as np
 import pandas as pd
 
 
+def dataframe_to_markdown(df: pd.DataFrame) -> str:
+    if df.empty:
+        return "_No data_"
+    try:
+        return df.to_markdown(index=False)
+    except ImportError:
+        headers = [str(column) for column in df.columns]
+        separator = ["---"] * len(headers)
+        rows = [
+            "| " + " | ".join(headers) + " |",
+            "| " + " | ".join(separator) + " |",
+        ]
+        for record in df.astype(object).itertuples(index=False, name=None):
+            values = ["-" if value is None else str(value) for value in record]
+            rows.append("| " + " | ".join(values) + " |")
+        return "\n".join(rows)
+
+
 def _to_decimal(value: Any) -> Decimal:
     if value is None:
         return Decimal("0")
@@ -504,7 +522,7 @@ def render_formal_markdown_report(
     if recent_trades.empty:
         lines.append("_无交易明细_")
     else:
-        lines.append(recent_trades.to_markdown(index=False))
+        lines.append(dataframe_to_markdown(recent_trades))
 
     lines.extend(
         [

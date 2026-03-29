@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from reporting import dataframe_to_markdown
 from runner import run_rebalance_backtest
 
 
@@ -34,15 +35,15 @@ def _render_summary_markdown(
         "",
         "## Account Report",
         "",
-        account_report.to_markdown(index=False) if not account_report.empty else "_No account rows_",
+        dataframe_to_markdown(account_report) if not account_report.empty else "_No account rows_",
         "",
         "## Fills Report",
         "",
-        fills_report.to_markdown(index=False) if not fills_report.empty else "_No fills_",
+        dataframe_to_markdown(fills_report) if not fills_report.empty else "_No fills_",
         "",
         "## Positions Report",
         "",
-        positions_report.to_markdown(index=False) if not positions_report.empty else "_No positions_",
+        dataframe_to_markdown(positions_report) if not positions_report.empty else "_No positions_",
         "",
     ]
     return "\n".join(sections)

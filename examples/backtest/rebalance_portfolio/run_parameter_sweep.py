@@ -6,6 +6,7 @@ from decimal import Decimal
 
 import pandas as pd
 
+from reporting import dataframe_to_markdown
 from runner import RESULTS_DIR
 from runner import run_rebalance_backtest
 
@@ -24,7 +25,7 @@ def _render_markdown(results: pd.DataFrame) -> str:
             "",
             "## Top 10 By Ending Portfolio Value",
             "",
-            top.to_markdown(index=False),
+            dataframe_to_markdown(top),
             "",
         ]
     )
