@@ -540,7 +540,7 @@ class FormalRebalancingStrategy(Strategy):
         sells = [item for item in plan.items if item.delta_value < ZERO]
         buys = [item for item in plan.items if item.delta_value > ZERO]
 
-        estimated_cash = self._free_quote_cash() + sum(abs(item.delta_value) for item in sells)
+        estimated_cash = self._free_quote_cash()
         sell_failed = False
 
         if plan.items:
@@ -565,11 +565,12 @@ class FormalRebalancingStrategy(Strategy):
 
         if not sell_failed:
             for item in sorted(buys, key=lambda x: x.delta_value, reverse=True):
-                if item.delta_value > estimated_cash:
+                required_cash = self._estimated_buy_cash_requirement(item.delta_value)
+                if required_cash > estimated_cash:
                     continue
                 submitted = self._submit_rebalance_order(item, OrderSide.BUY)
                 if submitted:
-                    estimated_cash -= item.delta_value
+                    estimated_cash -= required_cash
 
         self.last_rebalance_ts = int(current_dt.timestamp() * 1_000_000_000)
         self.daily_rebalance_count += 1
@@ -614,6 +615,18 @@ class FormalRebalancingStrategy(Strategy):
         )
         self.submit_order(order)
         return True
+
+    def _estimated_buy_cash_requirement(self, target_notional: Decimal) -> Decimal:
+        return target_notional * (ONE + self._buy_cash_buffer_ratio())
+
+    def _buy_cash_buffer_ratio(self) -> Decimal:
+        trading = self.config.trading if isinstance(self.config.trading, dict) else {}
+        fees = trading.get("fees", {}) if isinstance(trading, dict) else {}
+        execution = trading.get("execution", {}) if isinstance(trading, dict) else {}
+
+        taker_fee = Decimal(str(fees.get("taker", 0) or 0))
+        slippage_tolerance = Decimal(str(execution.get("slippage_tolerance", 0) or 0))
+        return max(ZERO, taker_fee + slippage_tolerance)
 
     def _trigger_kill_switch(self, drawdown: Decimal) -> None:
         if self.kill_switch_triggered:
